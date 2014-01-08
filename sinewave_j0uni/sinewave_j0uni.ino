@@ -5,6 +5,9 @@
 // sinewave.ino program creates a sinusoidal waveform adjustable in amplitude and frequency.
 // potentiometer 0 controls the frequency.
 // potentiometer 2 controls the amplitude.
+
+// VERSION HISTORY:
+// 5.1.2014 - j0uni : This version uses bitwise AND to get the "rolling" pointer to sinewave table.
  
 int in_ADC0, in_ADC1;  //variables for 2 ADCs values (ADC0, ADC1)
 int POT0, POT1, POT2, out_DAC0, out_DAC1; //variables for 3 pots (ADC8, ADC9, ADC10)
@@ -14,7 +17,7 @@ const int TOGGLE = 2;
 int accumulator, sample;
  
 // Create a table to hold pre computed sinewave, the table has a resolution of 600 samples
-#define no_samples 44100         // 44100 samples at 44.1KHz takes 1 second to be read. 
+#define no_samples 4096 // must be two's complement!     
 uint16_t nSineTable[no_samples]; // storing 12 bit samples in 16 bit variable.
  
 void createSineTable()
@@ -57,6 +60,8 @@ void setup()
   analogWrite(DAC0,0);  // Enables DAC0
   analogWrite(DAC1,0);  // Enables DAC1
 }
+
+float pot = 0;
  
 void loop()
 {
@@ -64,9 +69,12 @@ void loop()
   while((ADC->ADC_ISR & 0x1CC0)!=0x1CC0); // wait for ADC 0, 1, 8, 9, 10 conversion complete.
   in_ADC0=ADC->ADC_CDR[7];            // read data from ADC0
   in_ADC1=ADC->ADC_CDR[6];            // read data from ADC1  
-  POT0=ADC->ADC_CDR[10];                  // read data from ADC8        
+
+  POT0=ADC->ADC_CDR[10];                  // read data from ADC8          
   POT1=ADC->ADC_CDR[11];                  // read data from ADC9   
   POT2=ADC->ADC_CDR[12];                  // read data from ADC10  
+  
+  
 }
  
 //Interrupt at 44.1KHz rate (every 22.6us)
@@ -77,14 +85,12 @@ void TC4_Handler()
  
   //update the accumulator, from 0 to 511
   accumulator=POT0>>3;
- 
-  //calculate the sample
-  if(sample>=(no_samples-accumulator)) sample=0;
   sample=sample+accumulator;
- 
-  //Generate the DAC output
-  out_DAC0 = nSineTable[sample];
-  out_DAC1 = 4095 - nSineTable[sample];
+  
+  // Generate the DAC output
+  // AND with TWO'S COMPLEMENT value to get the bits we really want to use
+  out_DAC0 = nSineTable[sample & (no_samples-1)];
+  out_DAC1 = 4095 - nSineTable[sample & (no_samples-1)];
  
   //Add volume feature
   out_DAC0=map(out_DAC0,0,4095,0,POT2);
